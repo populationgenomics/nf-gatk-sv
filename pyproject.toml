@@ -1,0 +1,41 @@
+[project]
+name = "nf-gatk-sv"
+version = "0.1.0"
+description = "Nextflow port of cpg-flow-gatk-sv"
+requires-python = ">=3.11"
+dependencies = ["cpg-cromwell"]
+
+[tool.uv]
+# no gatk_sv_nf package yet; the root is a virtual workspace project for now
+package = false
+
+[tool.uv.sources]
+cpg-cromwell = { workspace = true }
+
+[tool.uv.workspace]
+members = ["cpg-cromwell"]
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "PL", "S", "BLE"]
+ignore = [
+    "PLR0911", "PLR0912", "PLR0913", "PLR0915", "PLR0917", "PLR2004",
+    "S101",    # asserts are fine in tests
+    "S603", "S607",  # subprocess with git is deliberate
+]
+
+[tool.ruff.lint.per-file-ignores]
+"*/tests/*" = ["S", "PLC0415", "BLE001"]
+"parity/*" = ["PLC0415", "S"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["cpg_cromwell"]

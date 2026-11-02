@@ -1,0 +1,166 @@
+{
+  "generated_by": "parity/gen_cromwell_options_fixture.py",
+  "cpg_utils_version": "5.8.1",
+  "cpg_flow_gatk_sv_version": "0.2.8",
+  "config_toml": "\n[workflow]\ndataset = \"fixture-ds\"\naccess_level = \"test\"\ndataset_gcp_project = \"fixture-project\"\ndriver_image = \"fixture-driver-image\"\ngatk_sv_commit = \"0123456789abcdef0123456789abcdef01234567\"\n\n[storage.default]\ndefault = \"gs://cpg-fixture-ds-test\"\nanalysis = \"gs://cpg-fixture-ds-test-analysis\"\ntmp = \"gs://cpg-fixture-ds-test-tmp\"\nweb = \"gs://cpg-fixture-ds-test-web\"\n\n[storage.fixture-ds]\ndefault = \"gs://cpg-fixture-ds-test\"\nanalysis = \"gs://cpg-fixture-ds-test-analysis\"\ntmp = \"gs://cpg-fixture-ds-test-tmp\"\nweb = \"gs://cpg-fixture-ds-test-web\"\n\n[storage.other-ds]\ndefault = \"gs://cpg-other-ds-main\"\nanalysis = \"gs://cpg-other-ds-main-analysis\"\ntmp = \"gs://cpg-other-ds-main-tmp\"\nweb = \"gs://cpg-other-ds-main-web\"\n",
+  "secret_json": "{\"type\": \"service_account\", \"client_email\": \"fixture-cromwell@fixture-project.iam.gserviceaccount.com\", \"private_key\": \"PLACEHOLDER-NOT-A-KEY\"}",
+  "cases": [
+    {
+      "name": "with_ar_guid",
+      "dataset": "fixture-ds",
+      "access_level": "test",
+      "output_prefix": "gatk_sv/output/FormatVcfForGatk/fixture-ds",
+      "labels": {
+        "stage": "formatvcfforgatk"
+      },
+      "project": null,
+      "copy_outputs_to_gcp": false,
+      "ar_guid_override": "6b1c8f1e-7d0a-4a7e-9a8e-3f2b0d1c4e5f",
+      "input_dict": {
+        "Wfl.some_input": "gs://x/y",
+        "Wfl.n": 3
+      },
+      "options_json": "{\"backend\": \"batch\", \"user_service_account_json\": \"{\\\"type\\\": \\\"service_account\\\", \\\"client_email\\\": \\\"fixture-cromwell@fixture-project.iam.gserviceaccount.com\\\", \\\"private_key\\\": \\\"PLACEHOLDER-NOT-A-KEY\\\"}\", \"google_compute_service_account\": \"fixture-cromwell@fixture-project.iam.gserviceaccount.com\", \"google_project\": \"fixture-project\", \"google_labels\": {\"stage\": \"formatvcfforgatk\", \"compute-category\": \"cromwell\", \"ar-guid\": \"6b1c8f1e-7d0a-4a7e-9a8e-3f2b0d1c4e5f\"}, \"final_call_logs_dir\": \"gs://cpg-fixture-ds-test-analysis/cromwell_logs/gatk_sv/output/FormatVcfForGatk/fixture-ds\", \"final_workflow_log_dir\": \"gs://cpg-fixture-ds-test-analysis/cromwell_logs/gatk_sv/output/FormatVcfForGatk/fixture-ds\", \"gcp_batch_gcs_root\": \"gs://cpg-fixture-ds-test-tmp/cromwell\"}",
+      "inputs_json": "{\"Wfl.some_input\": \"gs://x/y\", \"Wfl.n\": 3}"
+    },
+    {
+      "name": "without_ar_guid",
+      "dataset": "fixture-ds",
+      "access_level": "test",
+      "output_prefix": "gatk_sv/output/EvidenceQC/fixture-ds",
+      "labels": {
+        "stage": "evidenceqc"
+      },
+      "project": null,
+      "copy_outputs_to_gcp": false,
+      "ar_guid_override": null,
+      "input_dict": {
+        "Wfl.some_input": "gs://x/y",
+        "Wfl.n": 3
+      },
+      "options_json": "{\"backend\": \"batch\", \"user_service_account_json\": \"{\\\"type\\\": \\\"service_account\\\", \\\"client_email\\\": \\\"fixture-cromwell@fixture-project.iam.gserviceaccount.com\\\", \\\"private_key\\\": \\\"PLACEHOLDER-NOT-A-KEY\\\"}\", \"google_compute_service_account\": \"fixture-cromwell@fixture-project.iam.gserviceaccount.com\", \"google_project\": \"fixture-project\", \"google_labels\": {\"stage\": \"evidenceqc\", \"compute-category\": \"cromwell\"}, \"final_call_logs_dir\": \"gs://cpg-fixture-ds-test-analysis/cromwell_logs/gatk_sv/output/EvidenceQC/fixture-ds\", \"final_workflow_log_dir\": \"gs://cpg-fixture-ds-test-analysis/cromwell_logs/gatk_sv/output/EvidenceQC/fixture-ds\", \"gcp_batch_gcs_root\": \"gs://cpg-fixture-ds-test-tmp/cromwell\"}",
+      "inputs_json": "{\"Wfl.some_input\": \"gs://x/y\", \"Wfl.n\": 3}"
+    },
+    {
+      "name": "copy_outputs_explicit_project_gse_labels",
+      "dataset": "other-ds",
+      "access_level": "standard",
+      "output_prefix": "gatk_sv/output/GatherSampleEvidence/other-ds/cpgaaa111",
+      "labels": {
+        "stage": "gathersampleevidence",
+        "dataset": "other-ds",
+        "sequencing-group": "cpgaaa111"
+      },
+      "project": "billing-project",
+      "copy_outputs_to_gcp": true,
+      "ar_guid_override": "abc-123",
+      "input_dict": {
+        "Wfl.some_input": "gs://x/y",
+        "Wfl.n": 3
+      },
+      "options_json": "{\"backend\": \"batch\", \"user_service_account_json\": \"{\\\"type\\\": \\\"service_account\\\", \\\"client_email\\\": \\\"fixture-cromwell@fixture-project.iam.gserviceaccount.com\\\", \\\"private_key\\\": \\\"PLACEHOLDER-NOT-A-KEY\\\"}\", \"google_compute_service_account\": \"fixture-cromwell@fixture-project.iam.gserviceaccount.com\", \"google_project\": \"billing-project\", \"google_labels\": {\"stage\": \"gathersampleevidence\", \"dataset\": \"other-ds\", \"sequencing-group\": \"cpgaaa111\", \"compute-category\": \"cromwell\", \"ar-guid\": \"abc-123\"}, \"final_call_logs_dir\": \"gs://cpg-other-ds-main-analysis/cromwell_logs/gatk_sv/output/GatherSampleEvidence/other-ds/cpgaaa111\", \"final_workflow_log_dir\": \"gs://cpg-other-ds-main-analysis/cromwell_logs/gatk_sv/output/GatherSampleEvidence/other-ds/cpgaaa111\", \"gcp_batch_gcs_root\": \"gs://cpg-other-ds-main-tmp/cromwell\", \"final_workflow_outputs_dir\": \"gs://cpg-other-ds-main/gatk_sv/output/GatherSampleEvidence/other-ds/cpgaaa111\"}",
+      "inputs_json": "{\"Wfl.some_input\": \"gs://x/y\", \"Wfl.n\": 3}"
+    },
+    {
+      "name": "no_labels",
+      "dataset": "fixture-ds",
+      "access_level": "full",
+      "output_prefix": "x/y",
+      "labels": null,
+      "project": null,
+      "copy_outputs_to_gcp": true,
+      "ar_guid_override": null,
+      "input_dict": {
+        "Wfl.some_input": "gs://x/y",
+        "Wfl.n": 3
+      },
+      "options_json": "{\"backend\": \"batch\", \"user_service_account_json\": \"{\\\"type\\\": \\\"service_account\\\", \\\"client_email\\\": \\\"fixture-cromwell@fixture-project.iam.gserviceaccount.com\\\", \\\"private_key\\\": \\\"PLACEHOLDER-NOT-A-KEY\\\"}\", \"google_compute_service_account\": \"fixture-cromwell@fixture-project.iam.gserviceaccount.com\", \"google_project\": \"fixture-project\", \"google_labels\": {\"compute-category\": \"cromwell\"}, \"final_call_logs_dir\": \"gs://cpg-fixture-ds-test-analysis/cromwell_logs/x/y\", \"final_workflow_log_dir\": \"gs://cpg-fixture-ds-test-analysis/cromwell_logs/x/y\", \"gcp_batch_gcs_root\": \"gs://cpg-fixture-ds-test-tmp/cromwell\", \"final_workflow_outputs_dir\": \"gs://cpg-fixture-ds-test/x/y\"}",
+      "inputs_json": "{\"Wfl.some_input\": \"gs://x/y\", \"Wfl.n\": 3}"
+    }
+  ],
+  "input_cases": [
+    {
+      "wfl_name": "GatherSampleEvidence",
+      "inputs": {
+        "bam_or_cram_file": {
+          "__path__": "gs://cpg-fixture-ds-test/cram/CPGAAA111.cram"
+        },
+        "sample_id": "CPGAAA111",
+        "collect_coverage": true,
+        "run_module_metrics": false,
+        "reference_fasta": {
+          "__path__": "gs://refs/hg38.fasta"
+        },
+        "primary_contigs_list": {
+          "__path__": "gs://refs/contigs.list"
+        },
+        "disk_size_gb": 200,
+        "mem_gib": 7.5,
+        "samples": [
+          "CPGAAA111",
+          "CPGBBB222"
+        ],
+        "int_list": [
+          1,
+          2,
+          3
+        ],
+        "path_list": [
+          {
+            "__path__": "gs://a/b.vcf"
+          },
+          {
+            "__path__": "gs://a/c.vcf"
+          }
+        ],
+        "one_set": {
+          "__set__": [
+            "only"
+          ]
+        },
+        "nested": {
+          "k": [
+            1,
+            2
+          ],
+          "p": "gs://x"
+        },
+        "none_value": null
+      },
+      "expected_input_dict": {
+        "GatherSampleEvidence.bam_or_cram_file": "gs://cpg-fixture-ds-test/cram/CPGAAA111.cram",
+        "GatherSampleEvidence.sample_id": "CPGAAA111",
+        "GatherSampleEvidence.collect_coverage": true,
+        "GatherSampleEvidence.run_module_metrics": false,
+        "GatherSampleEvidence.reference_fasta": "gs://refs/hg38.fasta",
+        "GatherSampleEvidence.primary_contigs_list": "gs://refs/contigs.list",
+        "GatherSampleEvidence.disk_size_gb": 200,
+        "GatherSampleEvidence.mem_gib": 7.5,
+        "GatherSampleEvidence.samples": [
+          "CPGAAA111",
+          "CPGBBB222"
+        ],
+        "GatherSampleEvidence.int_list": [
+          "1",
+          "2",
+          "3"
+        ],
+        "GatherSampleEvidence.path_list": [
+          "gs://a/b.vcf",
+          "gs://a/c.vcf"
+        ],
+        "GatherSampleEvidence.one_set": [
+          "only"
+        ],
+        "GatherSampleEvidence.nested": {
+          "k": [
+            1,
+            2
+          ],
+          "p": "gs://x"
+        },
+        "GatherSampleEvidence.none_value": null
+      }
+    }
+  ]
+}
