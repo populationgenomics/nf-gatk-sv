@@ -31,9 +31,9 @@ def metamist_project(dataset: str) -> str:
     return dataset
 
 
-def stage_job_attrs(stage: str, target_attrs: Mapping[str, str]) -> dict[str, str]:
+def stage_job_attrs(stage: str, target_attrs: Mapping[str, Any]) -> dict[str, Any]:
     """Port of `cpg_flow.stage.Stage.get_job_attrs`: the base of every analysis meta."""
-    attrs = {'stage': stage}
+    attrs: dict[str, Any] = {'stage': stage}
     if sequencing_type := config_retrieve(['workflow', 'sequencing_type'], None):
         attrs['sequencing_type'] = sequencing_type
     return attrs | dict(target_attrs)

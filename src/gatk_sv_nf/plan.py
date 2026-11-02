@@ -36,6 +36,7 @@ from gatk_sv_nf.manifest import (
     combined_ped,
 )
 from gatk_sv_nf.metamist_client import Metamist
+from gatk_sv_nf.stages import create_sample_batches as csb
 from gatk_sv_nf.stages import gather_sample_evidence as gse
 
 logger = logging.getLogger(__name__)
@@ -127,6 +128,21 @@ def _check_evidence(manifest: Manifest, storage: Storage) -> None:
         )
 
 
+def _check_batch_size(manifest: Manifest, config: dict[str, Any], storage: Storage) -> None:
+    """
+    evidence_qc: cpg-flow refuses while queueing CreateSampleBatches, before EvidenceQC runs, if there are fewer SGs
+    than `workflow.min_batch_size`. It queues nothing for a stage whose output exists, so neither does this.
+    """
+    if config['workflow'].get('check_expected_outputs', True) and all(
+        storage.exists(p) for p in csb.expected_outputs(manifest).values()
+    ):
+        return
+    try:
+        csb.check_batch_size(manifest)
+    except csb.TooFewSequencingGroupsError as e:
+        raise PlanError(str(e)) from e
+
+
 def _multi_sample_files(manifest: Manifest, config: dict[str, Any], storage: Storage) -> dict[str, str]:
     """
     The files cpg-flow writes while queueing the multi-sample workflow: the combined PEDs (MakeCohortCombinedPed,
@@ -202,6 +218,7 @@ def make_plan(
     if entry == 'sample_evidence':
         plan.gse_chunks = _gse_todo(manifest, config, storage, gse_chunk_size)
     elif entry == 'evidence_qc':
+        _check_batch_size(manifest, config, storage)
         _check_evidence(manifest, storage)
     elif entry == 'multi_sample':
         check_for_cohort_overlaps(manifest)

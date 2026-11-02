@@ -1,0 +1,11 @@
+{
+  "plan_dir": "gs://cpg-test-dataset-test-tmp/gatk_sv_nf/plans/stubhash",
+  "entry": "evidence_qc",
+  "output_version": "stub_3",
+  "cohort_ids": ["COH2", "COH1"],
+  "dataset_names": ["test-dataset"],
+  "seqr_datasets": [],
+  "previous_spicy_vcf": null,
+  "gse_chunks": [],
+  "images": {"bcftools": "stub", "strvctvre": "stub"}
+}

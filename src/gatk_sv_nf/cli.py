@@ -1,8 +1,9 @@
 """
 `nf-gatk-sv` CLI (plan §3, §5.2).
 
-DRAFT: `plan` (the `PLAN` process, plan §5.4), `prepare-wdl` (the `PREPARE_WDL` process) and
-`stage GatherSampleEvidence --chunk ...` (the `GSE_CHUNK` process, plan §5.6). The per-target `stage` form comes later.
+DRAFT: `plan` (the `PLAN` process, plan §5.4), `prepare-wdl` (the `PREPARE_WDL` process),
+`stage GatherSampleEvidence --chunk ...` (the `GSE_CHUNK` process, plan §5.6) and the per-target `stage` form
+(the `STAGE` process) for EvidenceQC and CreateSampleBatches.
 
     nf-gatk-sv plan --entry sample_evidence --config gs://.../run.toml --dataset <ds> --out plan.json
     nf-gatk-sv plan ... --dry-run          # writes nothing to GCS; prints plan.json
@@ -10,6 +11,9 @@ DRAFT: `plan` (the `PLAN` process, plan §5.4), `prepare-wdl` (the `PREPARE_WDL`
     nf-gatk-sv prepare-wdl --plan gs://.../plans/<hash>
     nf-gatk-sv stage GatherSampleEvidence --plan gs://.../plans/<hash> \
         --chunk gs://.../plans/<hash>/gse_chunks/chunk_0.json --ar-guid <arGuid> --bundle <uri> --out-dir outputs
+    nf-gatk-sv stage EvidenceQC --plan <plan_dir> --target <cohort_id> --ar-guid <arGuid> --bundle <uri> \
+        --out outputs.json
+    nf-gatk-sv stage CreateSampleBatches --plan <plan_dir> --upstream EvidenceQC=<outputs.json> ... --out outputs.json
 
 Exit codes are cpg-cromwell's (0, 1, 2, 75, 124, 143/130), combined over the chunk.
 """
@@ -20,14 +24,23 @@ import logging
 import sys
 from pathlib import Path
 
-from cpg_cromwell import EXIT_OK, EXIT_USAGE, CromwellCliError, RunContext, SpecError, build_bundle, render
+from cpg_cromwell import EXIT_OK, EXIT_USAGE, CromwellCliError, RunContext, SpecError, build_bundle
 from cpg_cromwell.storage import join
 from gatk_sv_nf import plan as planning
 from gatk_sv_nf.config import ConfigError
-from gatk_sv_nf.manifest import load_sequencing_groups
+from gatk_sv_nf.manifest import Manifest, load_sequencing_groups
 from gatk_sv_nf.metamist_client import Metamist, MetamistError
+from gatk_sv_nf.stages import create_sample_batches as csb
+from gatk_sv_nf.stages import evidence_qc
 from gatk_sv_nf.stages import gather_sample_evidence as gse
-from gatk_sv_nf.stages._cromwell_base import GATK_SV_REPO, GATK_SV_WDL_DIR, bundle_root, default_reattach_root
+from gatk_sv_nf.stages._cromwell_base import (
+    GATK_SV_REPO,
+    GATK_SV_WDL_DIR,
+    bundle_root,
+    default_reattach_root,
+    dump_entry,
+    run_target,
+)
 
 logger = logging.getLogger('gatk_sv_nf')
 
@@ -46,6 +59,21 @@ def _use_plan_config(plan_dir: str) -> None:
     from cpg_utils.config import set_config_paths  # noqa: PLC0415
 
     set_config_paths([join(plan_dir, 'config.toml')])
+
+
+def _load_manifest(plan_dir: str, ctx: RunContext) -> Manifest:
+    return Manifest.from_json(_read(join(plan_dir, 'manifest.json'), ctx))
+
+
+def _upstream(values: list[str] | None, ctx: RunContext) -> dict[str, list[dict]]:
+    """`--upstream Stage=<outputs.json>`, repeated: `{stage: [outputs, ...]}`, in the order given (not relied on)."""
+    by_stage: dict[str, list[dict]] = {}
+    for value in values or []:
+        stage, sep, uri = value.partition('=')
+        if not sep or not stage or not uri:
+            raise SpecError(f'--upstream must be Stage=<outputs.json>, got {value!r}')
+        by_stage.setdefault(stage, []).append(json.loads(_read(uri, ctx)))
+    return by_stage
 
 
 def cmd_plan(args: argparse.Namespace, ctx: RunContext, metamist: Metamist | None = None) -> int:
@@ -112,24 +140,14 @@ def cmd_gather_sample_evidence(args: argparse.Namespace, ctx: RunContext) -> int
 
     if args.dump_inputs:
         assert ctx.storage is not None
-        dump = {}
-        for sg in sgs:
-            spec = gse.build_sg_spec(sg, ar_guid=args.ar_guid, exists=ctx.storage.exists, bundle=args.bundle)
-            prefixed, options = render(spec, context=ctx, secret_json=OFFLINE_SECRET)
-            # everything P3 compares with the old submission (parity/p3_compare.py)
-            dump[sg.id] = {
-                'inputs': prefixed,
-                'options': options,
-                'collect': spec.collect,
-                'workflow': spec.source.workflow,
-                'dataset': spec.dataset,
-                'access_level': spec.access_level,
-                'output_prefix': spec.output_prefix,
-                'copy_outputs': spec.copy_outputs,
-                # bounds before jitter, as `utils.create_polling_intervals` gives them
-                'poll': {'min': spec.poll.min_seconds, 'max': spec.poll.max_seconds},
-                'time_limit_seconds': spec.poll.time_limit_seconds,
-            }
+        dump = {
+            sg.id: dump_entry(
+                gse.build_sg_spec(sg, ar_guid=args.ar_guid, exists=ctx.storage.exists, bundle=args.bundle),
+                context=ctx,
+                secret_json=OFFLINE_SECRET,
+            )
+            for sg in sgs
+        }
         Path(args.dump_inputs).write_text(json.dumps(dump, indent=2, sort_keys=True))
         return 0
 
@@ -146,6 +164,63 @@ def cmd_gather_sample_evidence(args: argparse.Namespace, ctx: RunContext) -> int
         context=ctx,
     )
     return report.exit_code
+
+
+def cmd_evidence_qc(args: argparse.Namespace, ctx: RunContext) -> int:
+    """One cohort's EvidenceQC workflow (the `STAGE` process); `--dump-inputs` writes `{cohort_id: entry}`."""
+    _use_plan_config(args.plan)
+    manifest = _load_manifest(args.plan, ctx)
+    cohort = manifest.cohort(args.target)
+
+    def build():
+        return evidence_qc.build_cohort_spec(manifest, cohort, ar_guid=args.ar_guid, bundle=args.bundle)
+
+    if args.dump_inputs:
+        dump = {cohort.id: dump_entry(build(), context=ctx, secret_json=OFFLINE_SECRET)}
+        Path(args.dump_inputs).write_text(json.dumps(dump, indent=2, sort_keys=True))
+        return EXIT_OK
+
+    return run_target(
+        f'{evidence_qc.STAGE_NAME}/{cohort.id}',
+        evidence_qc.expected_outputs(cohort),
+        build,
+        out=Path(args.out),
+        reattach_root=args.reattach_root or default_reattach_root(),
+        registrar=None if args.no_register else lambda outputs: evidence_qc.register_outputs(cohort, outputs),
+        result_file=Path(args.result) if args.result else None,
+        context=ctx,
+    )
+
+
+def cmd_create_sample_batches(args: argparse.Namespace, ctx: RunContext) -> int:
+    _use_plan_config(args.plan)
+    manifest = _load_manifest(args.plan, ctx)
+    upstream = _upstream(args.upstream, ctx)
+    if unexpected := set(upstream) - {evidence_qc.STAGE_NAME}:
+        raise SpecError(f'{csb.STAGE_NAME} takes only EvidenceQC upstream outputs, got {sorted(unexpected)}')
+    return csb.run(
+        manifest,
+        out=Path(args.out),
+        upstream=upstream.get(evidence_qc.STAGE_NAME) if args.upstream else None,
+        registrar=None if args.no_register else csb.register_outputs,
+        context=ctx,
+    )
+
+
+def _target_stage_args(p: argparse.ArgumentParser) -> None:
+    """The arguments every per-target stage takes (the `STAGE` process)."""
+    p.add_argument('--plan', required=True, help='plan dir holding config.toml and manifest.json')
+    p.add_argument('--out', default='outputs.json', help='write {key: gs:// path} here once done')
+    p.add_argument('--no-register', action='store_true', help="don't create metamist analyses (crossover runs)")
+
+
+def _cromwell_stage_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument('--target', required=True, help='the target ID (a cohort ID for cohort stages)')
+    p.add_argument('--ar-guid', required=True, help='params.arGuid; becomes the ar-guid billing label')
+    p.add_argument('--bundle', help='gatk-sv bundle URI (default: the PREPARE_WDL location for gatk_sv_commit)')
+    p.add_argument('--reattach-root', help='default gs://<tmp>/gatk_sv_nf/cromwell_ids')
+    p.add_argument('--result', help="also write cpg-cromwell's result JSON here (when a workflow ran)")
+    p.add_argument('--dump-inputs', metavar='FILE', help='write the rendered Cromwell inputs/options; submit nothing')
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -185,6 +260,21 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument('--no-register', action='store_true', help="don't create metamist analyses (crossover runs)")
     g.add_argument('--dump-inputs', metavar='FILE', help='write the rendered Cromwell inputs/options; submit nothing')
     g.set_defaults(func=cmd_gather_sample_evidence)
+
+    e = stages.add_parser(evidence_qc.STAGE_NAME, help='one cohort (STAGE)')
+    _target_stage_args(e)
+    _cromwell_stage_args(e)
+    e.set_defaults(func=cmd_evidence_qc)
+
+    b = stages.add_parser(csb.STAGE_NAME, help='the multicohort (STAGE)')
+    _target_stage_args(b)
+    b.add_argument(
+        '--upstream',
+        action='append',
+        metavar='EvidenceQC=OUTPUTS_JSON',
+        help="each cohort's EvidenceQC outputs.json (repeat); checked against the manifest, which sets the order",
+    )
+    b.set_defaults(func=cmd_create_sample_batches)
     return parser
 
 

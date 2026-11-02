@@ -7,7 +7,10 @@ dependencies = [
     "cpg-cromwell",
     # core install only: never import cpg_utils.cromwell / hail_batch / dataproc (they pull in hailtop)
     "cpg-utils>=5.8.1",
+    "loguru==0.7.3",
     "metamist>=7",
+    "numpy==2.4.6",
+    "pandas==2.3.3",
 ]
 
 [project.scripts]
@@ -32,6 +35,8 @@ dev = ["pytest>=8", "ruff>=0.6"]
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+# copied from cpg-flow-gatk-sv and kept byte-identical below their header (plan §8): never reformat
+extend-exclude = ["src/gatk_sv_nf/scripts/*.py"]
 
 [tool.ruff.format]
 quote-style = "single"

@@ -6,6 +6,7 @@
 
 include { PLAN } from './modules/plan'
 include { SAMPLE_EVIDENCE } from './workflows/sample_evidence'
+include { EVIDENCE_QC } from './workflows/evidence_qc'
 
 /*
  * Types only: the defaults are in nextflow.config. Nextflow converts command-line values to these types, and
@@ -30,7 +31,7 @@ params {
 
 workflow {
     def ENTRIES = ['sample_evidence', 'evidence_qc', 'multi_sample']
-    def IMPLEMENTED = ['sample_evidence']
+    def IMPLEMENTED = ['sample_evidence', 'evidence_qc']
     if (!(params.entry in ENTRIES)) {
         error("--entry must be one of ${ENTRIES.join(', ')}, got '${params.entry}'")
     }
@@ -57,5 +58,8 @@ workflow {
     }
     else if (params.entry == 'sample_evidence') {
         SAMPLE_EVIDENCE(plan)
+    }
+    else if (params.entry == 'evidence_qc') {
+        EVIDENCE_QC(plan)
     }
 }

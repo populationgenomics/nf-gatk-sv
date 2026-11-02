@@ -298,11 +298,26 @@ def test_evidence_qc_requires_evidence(storage: DirStorage) -> None:
     from gatk_sv_nf.stages import gather_sample_evidence as gse
 
     with pytest.raises(planning.PlanError, match='6 SG'):
-        make('evidence_qc', storage)
+        make('evidence_qc', storage, min_batch_size=6)
     for sg in manifest_and_config(storage).sequencing_groups:
         put_all(storage, gse.evidence_qc_inputs(sg))
-    plan, _ = make('evidence_qc', storage)
+    plan, _ = make('evidence_qc', storage, min_batch_size=6)
     assert plan.gse_chunks == []
+
+
+def test_evidence_qc_refuses_too_few_sgs(storage: DirStorage) -> None:
+    """cpg-flow refuses while queueing CreateSampleBatches, before EvidenceQC runs; defaults.toml says 10."""
+    from gatk_sv_nf.stages import create_sample_batches as csb
+
+    with pytest.raises(planning.PlanError, match=r'6 sequencing group.*min_batch_size is 10'):
+        make('evidence_qc', storage)
+    # nothing is queued for a stage whose output exists, so then there's nothing to refuse
+    manifest = manifest_and_config(storage)
+    put_all(storage, list(csb.expected_outputs(manifest).values()))
+    with pytest.raises(planning.PlanError, match='missing GatherSampleEvidence outputs'):
+        make('evidence_qc', storage)
+    with pytest.raises(planning.PlanError, match='min_batch_size'):
+        make('evidence_qc', storage, check_expected_outputs=False)
 
 
 def test_multi_sample_side_files(storage: DirStorage) -> None:
@@ -369,7 +384,7 @@ def test_multi_sample_refuses_overlapping_cohorts(storage: DirStorage) -> None:
 
 def cli_args(tmp_path: Path, **overrides: Any) -> argparse.Namespace:
     config_path = tmp_path / 'run.toml'
-    config_path.write_text(toml.dumps(run_config()))
+    config_path.write_text(toml.dumps(run_config(min_batch_size=1)))
     args = {
         'entry': 'evidence_qc',
         'config': str(config_path),

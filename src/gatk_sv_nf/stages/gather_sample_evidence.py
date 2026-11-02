@@ -56,8 +56,11 @@ def analysis_keys() -> list[str]:
     return [f'{caller}_vcf' for caller in sv_callers()]
 
 
-def expected_outputs(sg: SequencingGroup) -> dict[str, str]:
+def all_outputs(sg: SequencingGroup) -> dict[str, str]:
     """
+    Every output GatherSampleEvidence can produce for the SG, whatever `only_jobs` says. This is what the later
+    stages read (EvidenceQC: `inputs.as_dict_by_target(GatherSampleEvidence)` with only_jobs unset).
+
     Evidence names must end exactly in `.sr.txt.gz`, `.pe.txt.gz` and `.sd.txt.gz`: GATK
     PrintSVEvidence picks its codec from the file name.
     """
@@ -74,9 +77,21 @@ def expected_outputs(sg: SequencingGroup) -> dict[str, str]:
         'pesr_disc': f'{prefix}/{sg.id}.pe.txt.gz',
         'pesr_disc_index': f'{prefix}/{sg.id}.pe.txt.gz.tbi',
     }
-    for caller in sv_callers(add_manta=True):
+    for caller in SV_CALLERS:
         outputs[f'{caller}_vcf'] = f'{prefix}/{sg.id}.{caller}.vcf.gz'
         outputs[f'{caller}_index'] = f'{prefix}/{sg.id}.{caller}.vcf.gz.tbi'
+    return outputs
+
+
+def _caller_of(key: str) -> str | None:
+    """The caller a `<caller>_vcf` / `<caller>_index` key belongs to; None for the evidence keys."""
+    return next((c for c in SV_CALLERS if key in (f'{c}_vcf', f'{c}_index')), None)
+
+
+def expected_outputs(sg: SequencingGroup) -> dict[str, str]:
+    """The stage's expected outputs: `all_outputs`, cut down to the jobs `only_jobs` lists."""
+    callers = sv_callers(add_manta=True)
+    outputs = {key: path for key, path in all_outputs(sg).items() if _caller_of(key) in (None, *callers)}
 
     if jobs := only_jobs():
         # keep the outputs of the listed jobs only (substring match on the key, as cpg-flow does)
@@ -94,8 +109,8 @@ def evidence_qc_inputs(sg: SequencingGroup) -> list[str]:
     What EvidenceQC reads for each SG (`jobs/EvidenceQC.py`): the coverage counts and every caller's VCF, whatever
     `only_jobs` says. `PLAN` checks these exist before an evidence_qc run (plan §13).
     """
-    prefix = sv_evidence_prefix(sg.dataset)
-    return [f'{prefix}/{sg.id}.coverage_counts.tsv.gz', *(f'{prefix}/{sg.id}.{c}.vcf.gz' for c in SV_CALLERS)]
+    every = all_outputs(sg)
+    return [every['coverage_counts'], *(every[f'{c}_vcf'] for c in SV_CALLERS)]
 
 
 def _reference_dict(fasta: str) -> str:
