@@ -1,0 +1,3 @@
+# stub runs never read this: PLAN's stub copies test/nextflow/plan.json
+[workflow]
+access_level = "test"

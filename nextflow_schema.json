@@ -1,0 +1,84 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/populationgenomics/nf-gatk-sv/main/nextflow_schema.json",
+    "title": "nf-gatk-sv parameters",
+    "description": "GATK-SV through Cromwell, planned and driven by the nf-gatk-sv CLI. main.nf validates these itself; this schema drives launch forms.",
+    "type": "object",
+    "$defs": {
+        "run": {
+            "title": "What to run",
+            "type": "object",
+            "required": ["arGuid", "dataset", "config", "entry"],
+            "properties": {
+                "arGuid": {
+                    "type": "string",
+                    "description": "analysis-runner GUID. Only used as the ar-guid billing label, on every Cromwell workflow and every Google Batch task."
+                },
+                "dataset": {
+                    "type": "string",
+                    "description": "The analysis dataset (no -test suffix): becomes workflow.dataset. It pays for the run, and its Cromwell service account submits every workflow."
+                },
+                "config": {
+                    "type": "string",
+                    "description": "gs:// path of the run TOML, layered over the pipeline's defaults.toml: access level, input cohorts or SGs, write_seqr_vcf_for_datasets, overrides. A config written for cpg-flow-gatk-sv works here."
+                },
+                "entry": {
+                    "type": "string",
+                    "enum": ["sample_evidence", "evidence_qc", "multi_sample"],
+                    "description": "The part of the pipeline to run. Only sample_evidence is implemented so far; the others are available with planOnly."
+                },
+                "billingProject": {
+                    "type": "string",
+                    "description": "GCP project Cromwell bills to (workflow.dataset_gcp_project). By default PLAN reads it from the metadata server of the VM it runs on."
+                },
+                "planOnly": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Stop after PLAN, to inspect a plan made with the real service account."
+                },
+                "register": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "If false, no metamist analyses are created (crossover and parity runs)."
+                }
+            }
+        },
+        "sample_evidence": {
+            "title": "GatherSampleEvidence",
+            "type": "object",
+            "properties": {
+                "gse_chunk_size": {
+                    "type": "integer",
+                    "default": 50,
+                    "description": "SGs per GSE_CHUNK task. Each task watches all its SGs' Cromwell workflows."
+                },
+                "gse_max_chunks": {
+                    "type": "integer",
+                    "default": 4,
+                    "description": "GSE_CHUNK tasks running at once. At most gse_chunk_size x gse_max_chunks workflows are in flight."
+                }
+            }
+        },
+        "infrastructure": {
+            "title": "Infrastructure",
+            "type": "object",
+            "required": ["driver_image"],
+            "properties": {
+                "driver_image": {
+                    "type": "string",
+                    "description": "Image with the nf-gatk-sv CLI, cpg-cromwell and gcloud, for PLAN, PREPARE_WDL and the Cromwell watchers. Becomes workflow.driver_image."
+                },
+                "cromwell_task_hours": {
+                    "type": "integer",
+                    "default": 30,
+                    "description": "Time limit of a Cromwell-watching task. Keep it above workflow.time_limit_seconds, so cpg-cromwell's own limit, which aborts the workflow, is hit first."
+                }
+            }
+        }
+    },
+    "allOf": [
+        {"$ref": "#/$defs/run"},
+        {"$ref": "#/$defs/sample_evidence"},
+        {"$ref": "#/$defs/infrastructure"}
+    ]
+}

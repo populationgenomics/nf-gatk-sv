@@ -1,0 +1,15 @@
+{
+  "plan_dir": "gs://cpg-test-dataset-test-tmp/gatk_sv_nf/plans/stubhash",
+  "entry": "sample_evidence",
+  "output_version": "stub_3",
+  "cohort_ids": [],
+  "dataset_names": ["test-dataset"],
+  "seqr_datasets": [],
+  "previous_spicy_vcf": null,
+  "gse_chunks": [
+    "gs://cpg-test-dataset-test-tmp/gatk_sv_nf/plans/stubhash/gse_chunks/chunk_0.json",
+    "gs://cpg-test-dataset-test-tmp/gatk_sv_nf/plans/stubhash/gse_chunks/chunk_1.json",
+    "gs://cpg-test-dataset-test-tmp/gatk_sv_nf/plans/stubhash/gse_chunks/chunk_2.json"
+  ],
+  "images": {"bcftools": "stub", "strvctvre": "stub"}
+}

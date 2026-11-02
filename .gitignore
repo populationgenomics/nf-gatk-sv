@@ -221,3 +221,8 @@ __marimo__/
 
 # PyCharm
 .idea
+
+# Nextflow
+work/
+.nextflow/
+.nextflow.log*

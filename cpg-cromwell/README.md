@@ -75,7 +75,9 @@ occurred.
 
 ```bash
 uv sync            # from the repo root (uv workspace)
-uv run pytest cpg-cromwell/tests
+# isolated: the tests check that gatk_sv_nf (the workspace root package) isn't installed alongside
+uv run --isolated --package cpg-cromwell pytest cpg-cromwell/tests
+uv run pytest     # gatk_sv_nf's own tests (test/)
 ```
 
 The tests need neither Hail nor network access: they use a fake in-process Cromwell server and

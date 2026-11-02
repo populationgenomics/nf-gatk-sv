@@ -1,0 +1,11 @@
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+.venv
+.git
+.idea
+.nextflow*
+work
+parity
+test
+cpg-cromwell/tests

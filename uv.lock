@@ -1382,9 +1382,11 @@ wheels = [
 [[package]]
 name = "nf-gatk-sv"
 version = "0.1.0"
-source = { virtual = "." }
+source = { editable = "." }
 dependencies = [
     { name = "cpg-cromwell" },
+    { name = "cpg-utils" },
+    { name = "metamist" },
 ]
 
 [package.dev-dependencies]
@@ -1394,7 +1396,11 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "cpg-cromwell", editable = "cpg-cromwell" }]
+requires-dist = [
+    { name = "cpg-cromwell", editable = "cpg-cromwell" },
+    { name = "cpg-utils", specifier = ">=5.8.1" },
+    { name = "metamist", specifier = ">=7" },
+]
 
 [package.metadata.requires-dev]
 dev = [
