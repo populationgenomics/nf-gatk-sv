@@ -6,8 +6,9 @@ from typing import Any
 import pytest
 from conftest import BASE_CONFIG, COMMIT
 
-from cpg_cromwell import EXIT_OK, RunContext
 from gatk_sv_nf import cli
+from gatk_sv_nf.cromwell import RunContext
+from gatk_sv_nf.errors import EXIT_OK
 from gatk_sv_nf.stages._cromwell_base import default_bundle
 
 
@@ -85,5 +86,5 @@ def test_dump_inputs_has_everything_p3_compares(tmp_path: Path) -> None:
     assert entry['dataset'] == 'analysis-ds'  # workflow.dataset, not the SG's
     assert entry['output_prefix'] == 'gatk_sv/output/GatherSampleEvidence/fixture-ds/CPG111'
     # BASE_CONFIG overrides the large bounds; these are before jitter
-    assert entry['poll'] == {'min': 0.01, 'max': 0.05}
+    assert entry['poll'] == {'min': 1, 'max': 2}
     assert entry['time_limit_seconds'] == 86400

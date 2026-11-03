@@ -66,12 +66,12 @@
             "properties": {
                 "driver_image": {
                     "type": "string",
-                    "description": "Image with the nf-gatk-sv CLI, cpg-cromwell and gcloud, for PLAN, PREPARE_WDL and the Cromwell watchers. Becomes workflow.driver_image."
+                    "description": "Image with the nf-gatk-sv CLI (and cpg_utils.cromwell_client), for PLAN, PREPARE_WDL and the Cromwell watchers. Becomes workflow.driver_image."
                 },
                 "cromwell_task_hours": {
                     "type": "integer",
                     "default": 30,
-                    "description": "Time limit of a Cromwell-watching task. Keep it above workflow.time_limit_seconds, so cpg-cromwell's own limit, which aborts the workflow, is hit first."
+                    "description": "Time limit of a Cromwell-watching task. Keep it above workflow.time_limit_seconds, so the Cromwell client's own limit, which aborts the workflow, is hit first."
                 }
             }
         }

@@ -3,9 +3,9 @@ GatherSampleEvidence (plan §5.6, §9).
 
 Port of `cpg_flow_gatk_sv.singlesample_workflow.GatherSampleEvidence` and
 `cpg_flow_gatk_sv.jobs.GatherSampleEvidence`. One workflow per SG; a chunk of SGs runs in one
-process through `cpg_cromwell.run_many`, which submits (or re-attaches), watches and copies the
-outputs. As each SG's outputs land, `on_result` registers its caller VCFs in metamist and writes
-`<out_dir>/<sg_id>.json`.
+process through `gatk_sv_nf.cromwell.run_many` (`cpg_utils.cromwell_client.run_workflows`), which
+re-attaches or submits, watches and copies the outputs, one thread per SG. As each SG's outputs land,
+`on_result` registers its caller VCFs in metamist and writes `<out_dir>/<sg_id>.json`.
 """
 
 import json
@@ -18,8 +18,9 @@ from typing import Any
 
 from cpg_utils.config import config_retrieve
 
-from cpg_cromwell import EXIT_OK, RunContext, SpecError, WorkflowResult, WorkflowSpec, combine_exit_codes, run_many
 from gatk_sv_nf import register
+from gatk_sv_nf.cromwell import RunContext, WorkflowReport, WorkflowSpec, run_many, write_reports
+from gatk_sv_nf.errors import EXIT_OK, SpecError, combine_exit_codes
 from gatk_sv_nf.manifest import SequencingGroup
 from gatk_sv_nf.paths import sv_evidence_prefix
 from gatk_sv_nf.stages._cromwell_base import CromwellJobSize, build_spec
@@ -245,10 +246,10 @@ def _write_outputs(out_dir: Path, sg_id: str, outputs: Mapping[str, Any]) -> Non
 @dataclass
 class ChunkReport:
     reused: list[str]
-    results: list[WorkflowResult]
+    results: list[WorkflowReport]
 
     @property
-    def failed(self) -> list[WorkflowResult]:
+    def failed(self) -> list[WorkflowReport]:
         return [r for r in self.results if not r.ok]
 
     @property
@@ -261,7 +262,6 @@ def run_chunk(
     *,
     ar_guid: str,
     out_dir: Path,
-    reattach_root: str | None,
     results_dir: str | None = None,
     bundle: str | None = None,
     registrar: Registrar | None = register_outputs,
@@ -274,10 +274,10 @@ def run_chunk(
 
     SGs whose expected outputs all exist are reused (D4): `<sg>.json` is written, nothing is
     submitted and nothing is registered, as cpg-flow does. Everything else goes to `run_many`.
-    `registrar=None` skips metamist registration (`--no-register`, plan §8).
+    `registrar=None` skips metamist registration (`--no-register`, plan §8). With `results_dir`, one
+    report per workflow is written there once they have all finished.
     """
-    ctx = (context or RunContext()).resolved()
-    assert ctx.storage is not None
+    ctx = context or RunContext()
     exists = ctx.storage.exists
     check_existing = config_retrieve(['workflow', 'check_expected_outputs'], True)
 
@@ -302,11 +302,9 @@ def run_chunk(
     if not specs:
         return ChunkReport(reused=reused, results=[])
 
-    def on_result(result: WorkflowResult) -> None:
-        # runs on the loop thread as soon as this SG's outputs are copied; raising fails just this SG
-        if not result.ok:
-            return
-        sg = sg_by_name[result.name]
+    def on_result(spec: WorkflowSpec, result: WorkflowReport) -> None:
+        # as soon as this SG's outputs are copied, one SG at a time; raising fails just this SG
+        sg = sg_by_name[spec.name]
         assert result.outputs is not None
         if registrar is not None:
             registrar(sg, result.outputs)
@@ -314,13 +312,13 @@ def run_chunk(
 
     results = run_many(
         specs,
-        reattach_root=reattach_root,
+        on_result=on_result,
         submit_interval=submit_interval,
         max_in_flight=max_in_flight,
-        results_dir=results_dir,
-        on_result=on_result,
         context=ctx,
     )
+    if results_dir:
+        write_reports(results, results_dir, ctx.storage)
     report = ChunkReport(reused=reused, results=results)
     if report.failed:
         logger.error(

@@ -17,8 +17,9 @@ def upstreamArgs(stages, files) {
 }
 
 /*
- * A Cromwell stage: submit (or re-attach to) one workflow, watch it and copy its outputs. Exit codes are
- * cpg-cromwell's: 75 (transient) is retried and re-attaches; anything else fails the task (conf/base.config).
+ * A Cromwell stage: re-attach to (by Submission key) or submit one workflow, watch it and copy its outputs. Exit
+ * codes are gatk_sv_nf.errors': 75 (transient) is retried and re-attaches; anything else fails the task
+ * (conf/base.config).
  */
 process STAGE {
     tag "${stage_name}/${target}"

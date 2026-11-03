@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate the cpg-cromwell options parity fixture (CROMWELL_CLI_DESIGN.md §7.2).
+Generate the Cromwell workflow-options parity fixture (NEXTFLOW_PORT_PLAN.md §5.1).
 
 Runs in the parity env: the OLD stack, with Hail, cpg-utils and cpg-flow-gatk-sv installed, e.g.
 
@@ -9,7 +9,7 @@ Runs in the parity env: the OLD stack, with Hail, cpg-utils and cpg-flow-gatk-sv
 It calls the real `cpg_utils.cromwell.run_cromwell_workflow` against a fake BashJob and records the
 workflow options and inputs JSON it echoes, and drives `cpg_flow_gatk_sv.utils.add_gatk_sv_jobs`
 far enough to record how it serialises inputs. The secret is a fake placeholder key.
-cpg-cromwell's own (Hail-free) tests compare against the result.
+test/test_cromwell.py (Hail-free) compares `gatk_sv_nf.cromwell.workflow_options` against the result.
 
 Regenerate only when pinning a new cpg-utils.
 """
@@ -25,7 +25,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-OUT = Path(__file__).resolve().parent.parent / 'cpg-cromwell' / 'tests' / 'fixtures' / 'cromwell_options_parity.json'
+OUT = Path(__file__).resolve().parent.parent / 'test' / 'fixtures' / 'cromwell_options_parity.json'
 
 FAKE_SECRET = json.dumps(
     {

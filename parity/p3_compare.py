@@ -9,7 +9,7 @@ google_labels, so ar-guid too), the outputs to collect and where they go, the wo
 and access level, output_prefix, copy_outputs, the polling bounds before jitter and the time limit.
 
 Not compared: google_compute_service_account, which is the client_email of each side's fake secret. The options
-fixture (cpg-cromwell/tests/fixtures/cromwell_options_parity.json) covers how it is derived. The old side's bundle
+fixture (test/fixtures/cromwell_options_parity.json) covers how it is derived. The old side's bundle
 source (repo, cwd, libs) is checked against what `nf-gatk-sv prepare-wdl` bundles.
 """
 

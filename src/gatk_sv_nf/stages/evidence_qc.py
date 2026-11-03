@@ -11,8 +11,8 @@ from typing import Any
 
 from cpg_utils.config import config_retrieve
 
-from cpg_cromwell import WorkflowSpec
 from gatk_sv_nf import paths, register
+from gatk_sv_nf.cromwell import WorkflowSpec
 from gatk_sv_nf.manifest import Cohort, Manifest
 from gatk_sv_nf.stages import gather_sample_evidence as gse
 from gatk_sv_nf.stages._cromwell_base import CromwellJobSize, build_spec

@@ -15,19 +15,22 @@ DRAFT: `plan` (the `PLAN` process, plan §5.4), `prepare-wdl` (the `PREPARE_WDL`
         --out outputs.json
     nf-gatk-sv stage CreateSampleBatches --plan <plan_dir> --upstream EvidenceQC=<outputs.json> ... --out outputs.json
 
-Exit codes are cpg-cromwell's (0, 1, 2, 75, 124, 143/130), combined over the chunk.
+Exit codes are gatk_sv_nf.errors' (0, 1, 2, 75, 124, 143/130), combined over the chunk. Cromwell workflows are
+re-attached by Submission key (`cpg_utils.cromwell_client`), so a relaunch never submits a duplicate of one that is
+still running or that succeeded within the last week.
 """
 
 import argparse
 import json
 import logging
+import signal
 import sys
 from pathlib import Path
 
-from cpg_cromwell import EXIT_OK, EXIT_USAGE, CromwellCliError, RunContext, SpecError, build_bundle
-from cpg_cromwell.storage import join
 from gatk_sv_nf import plan as planning
 from gatk_sv_nf.config import ConfigError
+from gatk_sv_nf.cromwell import RunContext
+from gatk_sv_nf.errors import EXIT_OK, EXIT_SIGTERM, EXIT_USAGE, SpecError, StageError, exit_code_for
 from gatk_sv_nf.manifest import Manifest, load_sequencing_groups
 from gatk_sv_nf.metamist_client import Metamist, MetamistError
 from gatk_sv_nf.stages import create_sample_batches as csb
@@ -37,10 +40,11 @@ from gatk_sv_nf.stages._cromwell_base import (
     GATK_SV_REPO,
     GATK_SV_WDL_DIR,
     bundle_root,
-    default_reattach_root,
     dump_entry,
     run_target,
 )
+from gatk_sv_nf.storage import join
+from gatk_sv_nf.wdl_bundle import build_bundle
 
 logger = logging.getLogger('gatk_sv_nf')
 
@@ -48,7 +52,6 @@ OFFLINE_SECRET = json.dumps({'client_email': '<offline: secret not read>'})
 
 
 def _read(uri: str, ctx: RunContext) -> str:
-    assert ctx.storage is not None
     text = ctx.storage.read_text(uri)
     if text is None:
         raise SpecError(f'not found: {uri}')
@@ -78,7 +81,6 @@ def _upstream(values: list[str] | None, ctx: RunContext) -> dict[str, list[dict]
 
 def cmd_plan(args: argparse.Namespace, ctx: RunContext, metamist: Metamist | None = None) -> int:
     """Resolve the config, build the manifest, write the plan dir; write plan.json to --out (plan §5.4)."""
-    assert ctx.storage is not None
     dry_run = args.dry_run or args.print_config
     try:
         plan, config = planning.make_plan(
@@ -139,23 +141,20 @@ def cmd_gather_sample_evidence(args: argparse.Namespace, ctx: RunContext) -> int
     sgs = [all_sgs[sg_id] for sg_id in sg_ids]
 
     if args.dump_inputs:
-        assert ctx.storage is not None
         dump = {
             sg.id: dump_entry(
                 gse.build_sg_spec(sg, ar_guid=args.ar_guid, exists=ctx.storage.exists, bundle=args.bundle),
-                context=ctx,
-                secret_json=OFFLINE_SECRET,
+                service_account_json=OFFLINE_SECRET,
             )
             for sg in sgs
         }
         Path(args.dump_inputs).write_text(json.dumps(dump, indent=2, sort_keys=True))
-        return 0
+        return EXIT_OK
 
     report = gse.run_chunk(
         sgs,
         ar_guid=args.ar_guid,
         out_dir=Path(args.out_dir),
-        reattach_root=args.reattach_root or default_reattach_root(),
         results_dir=args.results_dir,
         bundle=args.bundle,
         registrar=None if args.no_register else gse.register_outputs,
@@ -176,7 +175,7 @@ def cmd_evidence_qc(args: argparse.Namespace, ctx: RunContext) -> int:
         return evidence_qc.build_cohort_spec(manifest, cohort, ar_guid=args.ar_guid, bundle=args.bundle)
 
     if args.dump_inputs:
-        dump = {cohort.id: dump_entry(build(), context=ctx, secret_json=OFFLINE_SECRET)}
+        dump = {cohort.id: dump_entry(build(), service_account_json=OFFLINE_SECRET)}
         Path(args.dump_inputs).write_text(json.dumps(dump, indent=2, sort_keys=True))
         return EXIT_OK
 
@@ -185,7 +184,6 @@ def cmd_evidence_qc(args: argparse.Namespace, ctx: RunContext) -> int:
         evidence_qc.expected_outputs(cohort),
         build,
         out=Path(args.out),
-        reattach_root=args.reattach_root or default_reattach_root(),
         registrar=None if args.no_register else lambda outputs: evidence_qc.register_outputs(cohort, outputs),
         result_file=Path(args.result) if args.result else None,
         context=ctx,
@@ -218,8 +216,7 @@ def _cromwell_stage_args(p: argparse.ArgumentParser) -> None:
     p.add_argument('--target', required=True, help='the target ID (a cohort ID for cohort stages)')
     p.add_argument('--ar-guid', required=True, help='params.arGuid; becomes the ar-guid billing label')
     p.add_argument('--bundle', help='gatk-sv bundle URI (default: the PREPARE_WDL location for gatk_sv_commit)')
-    p.add_argument('--reattach-root', help='default gs://<tmp>/gatk_sv_nf/cromwell_ids')
-    p.add_argument('--result', help="also write cpg-cromwell's result JSON here (when a workflow ran)")
+    p.add_argument('--result', help='also write the workflow report JSON here (when a workflow ran)')
     p.add_argument('--dump-inputs', metavar='FILE', help='write the rendered Cromwell inputs/options; submit nothing')
 
 
@@ -253,8 +250,7 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument('--ar-guid', required=True, help='params.arGuid; becomes the ar-guid billing label')
     g.add_argument('--out-dir', default='outputs', help='writes <sg_id>.json per finished SG')
     g.add_argument('--bundle', help='gatk-sv bundle URI (default: the PREPARE_WDL location for gatk_sv_commit)')
-    g.add_argument('--reattach-root', help='default gs://<tmp>/gatk_sv_nf/cromwell_ids')
-    g.add_argument('--results-dir', help='also write one cpg-cromwell result JSON per workflow here')
+    g.add_argument('--results-dir', help='also write one workflow report JSON per submitted workflow here')
     g.add_argument('--submit-interval', type=float, default=1.0)
     g.add_argument('--max-in-flight', type=int)
     g.add_argument('--no-register', action='store_true', help="don't create metamist analyses (crossover runs)")
@@ -285,15 +281,28 @@ def main(argv: list[str] | None = None) -> int:
         format='%(asctime)s %(levelname)s %(name)s: %(message)s',
         stream=sys.stderr,
     )
-    ctx = RunContext().resolved()
+    # cpg_utils.cromwell_client installs no signal handlers. Turning SIGTERM (Nextflow killing the task) into
+    # SystemExit makes it unwind like Ctrl-C: every workflow still being watched is aborted on the way out
+    previous = signal.signal(signal.SIGTERM, _exit_on_sigterm)
+    ctx = RunContext()
     try:
         return args.func(args, ctx)
-    except CromwellCliError as e:
+    except StageError as e:
         logger.error('%s', e)
         return e.exit_code
     except (KeyError, ValueError) as e:  # malformed manifest/chunk/config
         logger.error('%s: %s', type(e).__name__, e)
         return EXIT_USAGE
+    except KeyboardInterrupt as e:
+        logger.error('interrupted; workflows still being watched were aborted')
+        return exit_code_for(e)
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def _exit_on_sigterm(_signum: int, _frame: object) -> None:
+    logger.error('SIGTERM received; aborting workflows still being watched')
+    sys.exit(EXIT_SIGTERM)
 
 
 if __name__ == '__main__':

@@ -18,8 +18,9 @@ from typing import Any
 
 from cpg_utils.config import config_retrieve
 
-from cpg_cromwell import EXIT_FAILED, EXIT_OK, RunContext, SpecError
 from gatk_sv_nf import paths, register
+from gatk_sv_nf.cromwell import RunContext
+from gatk_sv_nf.errors import EXIT_FAILED, EXIT_OK, SpecError
 from gatk_sv_nf.manifest import Manifest
 from gatk_sv_nf.scripts import sample_batching
 from gatk_sv_nf.stages import evidence_qc
@@ -122,9 +123,7 @@ def run(
     Reuse `sgid_batches.json` if it exists (D4); otherwise check the batch size, write `sgs_meta.json`, run the
     batching on the QC tables, write the result to its expected path, register it, and write `outputs.json` last.
     """
-    ctx = (context or RunContext()).resolved()
-    storage = ctx.storage
-    assert storage is not None
+    storage = (context or RunContext()).storage
     expected = expected_outputs(manifest)
     output = expected[OUTPUT_KEY]
     if upstream is not None:

@@ -67,7 +67,7 @@ class SequencingGroup:
     pedigree: Pedigree | None = None
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> 'SequencingGroup':
+    def from_dict(cls, data: Mapping[str, Any]) -> SequencingGroup:
         return cls(
             id=data['id'],
             dataset=data['dataset'],
@@ -177,7 +177,7 @@ class Manifest:
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + '\n'
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> 'Manifest':
+    def from_dict(cls, data: Mapping[str, Any]) -> Manifest:
         mc = data['multicohort']
         return cls(
             name=mc['name'],
@@ -198,7 +198,7 @@ class Manifest:
         )
 
     @classmethod
-    def from_json(cls, text: str) -> 'Manifest':
+    def from_json(cls, text: str) -> Manifest:
         return cls.from_dict(json.loads(text))
 
 
@@ -304,7 +304,7 @@ class ManifestRequest:
     find_previous_spicy_vcf: bool = False
 
     @classmethod
-    def from_config(cls, config: Mapping[str, Any], *, find_previous_spicy_vcf: bool = False) -> 'ManifestRequest':
+    def from_config(cls, config: Mapping[str, Any], *, find_previous_spicy_vcf: bool = False) -> ManifestRequest:
         wf = config['workflow']
         return cls(
             analysis_dataset=wf['dataset'],

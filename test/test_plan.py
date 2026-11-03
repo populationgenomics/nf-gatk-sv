@@ -12,10 +12,11 @@ import toml
 from conftest import DirStorage
 from fake_metamist import FakeMetamist, fixture
 
-from cpg_cromwell import EXIT_OK, EXIT_USAGE, RunContext
 from gatk_sv_nf import cli, paths
 from gatk_sv_nf import config as cfg
 from gatk_sv_nf import plan as planning
+from gatk_sv_nf.cromwell import RunContext
+from gatk_sv_nf.errors import EXIT_OK, EXIT_USAGE
 from gatk_sv_nf.manifest import (
     Manifest,
     ManifestRequest,

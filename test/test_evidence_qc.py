@@ -2,10 +2,11 @@ import json
 from pathlib import Path
 
 import pytest
-from tests.conftest import DirStorage, FakeCromwell, make_context, write_bundle
+from conftest import SECRET, DirStorage, FakeCromwell, make_context, write_bundle
 
-from cpg_cromwell import EXIT_FAILED, EXIT_OK, render
 from gatk_sv_nf import cli
+from gatk_sv_nf.cromwell import render
+from gatk_sv_nf.errors import EXIT_FAILED, EXIT_OK
 from gatk_sv_nf.manifest import Cohort, Manifest, SequencingGroup
 from gatk_sv_nf.stages import evidence_qc
 from gatk_sv_nf.stages._cromwell_base import default_bundle, run_target
@@ -51,12 +52,6 @@ def qc_config(write_config) -> Path:
     return _activate(write_config(), _config_text())  # write_config registers the cache reset
 
 
-@pytest.fixture
-def fast_qc_config(write_config) -> Path:
-    """Polls in fractions of a second: EvidenceQC is MEDIUM (40s/400s by default)."""
-    return _activate(write_config(), _config_text() + '\n[cromwell_polling_intervals.medium]\nmin = 0.01\nmax = 0.05\n')
-
-
 def test_expected_outputs(qc_config: Path) -> None:
     out = evidence_qc.expected_outputs(COHORT)
     assert out['qc_table'] == f'{PREFIX}/evidence_qc_table.tsv'
@@ -94,14 +89,14 @@ def test_spec(qc_config: Path) -> None:
     spec = evidence_qc.build_cohort_spec(MANIFEST, COHORT, ar_guid='guid-1')
     assert spec.name == 'EvidenceQC/analysis-ds'
     assert spec.output_prefix == 'gatk_sv/output/EvidenceQC/analysis-ds'
-    assert spec.source.bundle == default_bundle()
-    assert spec.source.workflow == 'EvidenceQC.wdl'
+    assert spec.bundle == default_bundle()
+    assert spec.workflow == 'EvidenceQC.wdl'
     assert spec.labels == {'stage': 'evidenceqc'}
     assert spec.inputs['runtime_attr_mediancov'] == {'mem_gb': 64}
     assert spec.collect == evidence_qc.expected_outputs(COHORT)
-    assert (spec.poll.min_seconds, spec.poll.max_seconds) == (40, 400)  # MEDIUM, no override
+    assert (spec.poll_min_seconds, spec.poll_max_seconds) == (40, 400)  # MEDIUM, no override
 
-    inputs, options = render(spec, secret_json=json.dumps({'client_email': 'sa@example.com'}))
+    inputs, options = render(spec, service_account_json=SECRET)
     assert inputs['EvidenceQC.samples'] == ['CPG20', 'CPG10', 'CPG30']
     assert options['google_labels'] == {'stage': 'evidenceqc', 'compute-category': 'cromwell', 'ar-guid': 'guid-1'}
 
@@ -143,7 +138,6 @@ def _run(storage: DirStorage, cromwell: FakeCromwell, tmp_path: Path, registrar)
         evidence_qc.expected_outputs(COHORT),
         lambda: evidence_qc.build_cohort_spec(MANIFEST, COHORT, ar_guid='guid-1'),
         out=tmp_path / 'outputs.json',
-        reattach_root=None,
         registrar=registrar,
         result_file=tmp_path / 'result.json',
         context=make_context(cromwell, storage),
@@ -159,7 +153,7 @@ def _wdl_outputs(storage: DirStorage, cromwell: FakeCromwell) -> None:
 
 
 def test_run_registers_and_writes_outputs(
-    fast_qc_config: Path, cromwell: FakeCromwell, storage: DirStorage, tmp_path: Path
+    qc_config: Path, cromwell: FakeCromwell, storage: DirStorage, tmp_path: Path
 ) -> None:
     _wdl_outputs(storage, cromwell)
     created: list[tuple] = []
@@ -188,16 +182,14 @@ def test_run_registers_and_writes_outputs(
     assert (tmp_path / 'outputs.json').exists()
 
 
-def test_run_failed_workflow(fast_qc_config: Path, cromwell: FakeCromwell, storage: DirStorage, tmp_path: Path) -> None:
+def test_run_failed_workflow(qc_config: Path, cromwell: FakeCromwell, storage: DirStorage, tmp_path: Path) -> None:
     _wdl_outputs(storage, cromwell)
-    cromwell.scripts = [['Submitted', 'Failed']]
+    cromwell.default_script = ['Submitted', 'Failed']
     assert _run(storage, cromwell, tmp_path, None) == EXIT_FAILED
     assert not (tmp_path / 'outputs.json').exists()
 
 
-def test_run_registration_failure(
-    fast_qc_config: Path, cromwell: FakeCromwell, storage: DirStorage, tmp_path: Path
-) -> None:
+def test_run_registration_failure(qc_config: Path, cromwell: FakeCromwell, storage: DirStorage, tmp_path: Path) -> None:
     _wdl_outputs(storage, cromwell)
 
     def broken(_outputs):

@@ -15,8 +15,8 @@ import json
 import sys
 from pathlib import Path
 
-from cpg_cromwell import storage as cromwell_storage
 from gatk_sv_nf import cli
+from gatk_sv_nf import storage as gcs_storage
 
 
 def main() -> int:
@@ -28,12 +28,12 @@ def main() -> int:
 
     if args.existing:
         existing = set(json.loads(Path(args.existing).read_text()))
-        real_exists = cromwell_storage.Storage.exists
+        real_exists = gcs_storage.Storage.exists
 
-        def exists(self: cromwell_storage.Storage, uri: str) -> bool:
-            return uri in existing if cromwell_storage.is_gcs(uri) else real_exists(self, uri)
+        def exists(self: gcs_storage.Storage, uri: str) -> bool:
+            return uri in existing if gcs_storage.is_gcs(uri) else real_exists(self, uri)
 
-        cromwell_storage.Storage.exists = exists  # type: ignore[method-assign]
+        gcs_storage.Storage.exists = exists  # type: ignore[method-assign]
 
     return cli.main(cli_args)
 

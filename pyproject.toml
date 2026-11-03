@@ -2,11 +2,11 @@
 name = "nf-gatk-sv"
 version = "0.1.0"
 description = "Nextflow port of cpg-flow-gatk-sv"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
-    "cpg-cromwell",
-    # core install only: never import cpg_utils.cromwell / hail_batch / dataproc (they pull in hailtop)
-    "cpg-utils>=5.8.1",
+    # core install only: never import cpg_utils.cromwell / hail_batch / dataproc (they pull in hailtop).
+    # cpg_utils.cromwell_client is the Cromwell client (plan D6)
+    "cpg-utils>=5.9.0",
     "loguru==0.7.3",
     "metamist>=7",
     "numpy==2.4.6",
@@ -24,17 +24,15 @@ build-backend = "hatchling.build"
 packages = ["src/gatk_sv_nf"]
 
 [tool.uv.sources]
-cpg-cromwell = { workspace = true }
-
-[tool.uv.workspace]
-members = ["cpg-cromwell"]
+# cpg_utils.cromwell_client is not released yet: drop this once a cpg-utils release has it
+cpg-utils = { git = "https://github.com/populationgenomics/cpg-utils", branch = "non-hail-cromwell-client" }
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.6"]
 
 [tool.ruff]
 line-length = 120
-target-version = "py311"
+target-version = "py314"
 # copied from cpg-flow-gatk-sv and kept byte-identical below their header (plan §8): never reformat
 extend-exclude = ["src/gatk_sv_nf/scripts/*.py"]
 
@@ -50,12 +48,11 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"*/tests/*" = ["S", "PLC0415", "BLE001"]
 "test/*" = ["S", "PLC0415", "BLE001", "E402"]
 "parity/*" = ["PLC0415", "S"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["cpg_cromwell", "gatk_sv_nf"]
+known-first-party = ["gatk_sv_nf"]
 
 [tool.pytest.ini_options]
 testpaths = ["test"]

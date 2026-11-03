@@ -3,10 +3,11 @@ from pathlib import Path
 
 import pandas as pd
 import pytest
-from tests.conftest import DirStorage
+from conftest import DirStorage
 
-from cpg_cromwell import EXIT_FAILED, EXIT_OK, RunContext, SpecError
 from gatk_sv_nf import cli
+from gatk_sv_nf.cromwell import RunContext
+from gatk_sv_nf.errors import EXIT_FAILED, EXIT_OK, SpecError
 from gatk_sv_nf.manifest import Cohort, Manifest, SequencingGroup
 from gatk_sv_nf.scripts import sample_batching
 from gatk_sv_nf.stages import create_sample_batches as csb
@@ -233,7 +234,7 @@ def test_cli(batch_config: Path, storage: DirStorage, tmp_path: Path, monkeypatc
     for i, table in enumerate(csb.qc_tables(MANIFEST)):
         (tmp_path / f'up{i}.json').write_text(json.dumps({'qc_table': table}))
         ups += ['--upstream', f'EvidenceQC={tmp_path / f"up{i}.json"}']
-    monkeypatch.setattr(cli.RunContext, 'resolved', lambda self: RunContext(storage=storage))
+    monkeypatch.setattr(cli, 'RunContext', lambda: RunContext(storage=storage))
 
     out = tmp_path / 'outputs.json'
     args = ['stage', 'CreateSampleBatches', '--plan', str(plan), *ups, '--out', str(out), '--no-register']

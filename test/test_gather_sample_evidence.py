@@ -3,9 +3,10 @@ import json
 from pathlib import Path
 
 import pytest
-from tests.conftest import DirStorage, FakeCromwell, make_context, write_bundle
+from conftest import SECRET, DirStorage, FakeCromwell, make_context, write_bundle
 
-from cpg_cromwell import EXIT_FAILED, EXIT_OK, SpecError, render
+from gatk_sv_nf.cromwell import render
+from gatk_sv_nf.errors import EXIT_FAILED, EXIT_OK, SpecError
 from gatk_sv_nf.manifest import SequencingGroup
 from gatk_sv_nf.stages import gather_sample_evidence as gse
 from gatk_sv_nf.stages._cromwell_base import default_bundle
@@ -15,7 +16,6 @@ SG = SequencingGroup(
 )
 EVIDENCE = 'gs://cpg-fixture-ds-test/sv_evidence'
 GATK_SV_COMMIT = '890582922bccb4b651275506a34311c949417f6c'  # as in conftest.BASE_CONFIG
-OFFLINE_SECRET = json.dumps({'client_email': 'sa@example.com'})
 
 
 def never(_uri: str) -> bool:
@@ -94,16 +94,16 @@ def test_spec(config: Path) -> None:
     assert spec.output_prefix == 'gatk_sv/output/GatherSampleEvidence/fixture-ds/CPG111'
     assert spec.dataset == 'analysis-ds'  # workflow.dataset, not the SG's
     assert spec.access_level == 'test'
-    assert spec.source.bundle == default_bundle()
-    assert spec.source.bundle == f'gs://cpg-analysis-ds-test-tmp/gatk_sv_nf/bundles/gatk-sv/{GATK_SV_COMMIT}/'
-    assert spec.source.workflow == 'GatherSampleEvidence.wdl'
+    assert spec.bundle == default_bundle()
+    assert spec.bundle == f'gs://cpg-analysis-ds-test-tmp/gatk_sv_nf/bundles/gatk-sv/{GATK_SV_COMMIT}/'
+    assert spec.workflow == 'GatherSampleEvidence.wdl'
     assert spec.labels == {'dataset': 'fixture-ds', 'sequencing-group': 'cpg111', 'stage': 'gathersampleevidence'}
     assert spec.inputs['runtime_attr_wham'] == {'mem_gb': 32}  # resource override merged
     assert spec.collect == gse.expected_outputs(SG)
-    assert (spec.poll.min_seconds, spec.poll.max_seconds, spec.poll.jitter) == (0.01, 0.05, True)
-    assert spec.poll.time_limit_seconds == 86400
+    assert (spec.poll_min_seconds, spec.poll_max_seconds) == (1, 2)  # before jitter
+    assert spec.time_limit_seconds == 86400
 
-    inputs, options = render(spec, secret_json=OFFLINE_SECRET)
+    inputs, options = render(spec, service_account_json=SECRET)
     assert inputs['GatherSampleEvidence.sample_id'] == 'CPG111'
     assert options['google_labels'] == {
         'dataset': 'fixture-ds',
@@ -118,7 +118,7 @@ def test_spec(config: Path) -> None:
 def test_no_callers_refuses_to_run(write_config, tmp_path: Path) -> None:
     write_config('\n[workflow.GatherSampleEvidence]\nonly_jobs = ["coverage_counts", "pesr"]\n')
     with pytest.raises(SpecError, match='no SV caller'):
-        gse.run_chunk([SG], ar_guid='g', out_dir=tmp_path / 'out', reattach_root=None)
+        gse.run_chunk([SG], ar_guid='g', out_dir=tmp_path / 'out')
 
 
 # ---- end to end: fake Cromwell, directory-backed GCS -----------------------------------------------
@@ -136,8 +136,9 @@ def test_run_chunk(config: Path, cromwell: FakeCromwell, storage: DirStorage, tm
     for path in gse.expected_outputs(reused).values():
         storage.put(path, 'already here')
     failing = SequencingGroup(id='CPG333', dataset='fixture-ds', cram='gs://x/CPG333.cram')
-    # submissions happen in spec order: CPG111 then CPG333
-    cromwell.scripts = [['Submitted', 'Running', 'Succeeded'], ['Submitted', 'Failed']]
+    cromwell.script_for = lambda inputs: (
+        ['Submitted', 'Failed'] if inputs['GatherSampleEvidence.sample_id'] == 'CPG333' else ['Submitted', 'Succeeded']
+    )
 
     created: list[tuple] = []
 
@@ -151,7 +152,6 @@ def test_run_chunk(config: Path, cromwell: FakeCromwell, storage: DirStorage, tm
         [SG, reused, failing],
         ar_guid='guid-1',
         out_dir=out_dir,
-        reattach_root=None,
         registrar=registrar,
         submit_interval=0,
         context=make_context(cromwell, storage),
@@ -202,7 +202,6 @@ def test_run_chunk_registration_failure_fails_the_sg(
         [SG],
         ar_guid='guid-1',
         out_dir=tmp_path / 'outputs',
-        reattach_root=None,
         registrar=broken,
         submit_interval=0,
         context=make_context(cromwell, storage),

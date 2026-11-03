@@ -24,7 +24,7 @@ process GSE_CHUNK {
 
     output:
     path 'outputs/*.json', optional: true, emit: outputs
-    // the CLI's exit code, and one cpg-cromwell result per submitted or re-attached workflow
+    // the CLI's exit code, and one workflow report per submitted or re-attached workflow
     tuple val(chunk), path('exit_code'), path('results'), emit: status
 
     script:

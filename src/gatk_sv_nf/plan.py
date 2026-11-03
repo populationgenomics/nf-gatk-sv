@@ -25,7 +25,6 @@ from typing import Any
 
 import toml
 
-from cpg_cromwell.storage import Storage, join
 from gatk_sv_nf import config as cfg
 from gatk_sv_nf import paths
 from gatk_sv_nf.manifest import (
@@ -38,6 +37,7 @@ from gatk_sv_nf.manifest import (
 from gatk_sv_nf.metamist_client import Metamist
 from gatk_sv_nf.stages import create_sample_batches as csb
 from gatk_sv_nf.stages import gather_sample_evidence as gse
+from gatk_sv_nf.storage import Storage, join
 
 logger = logging.getLogger(__name__)
 
